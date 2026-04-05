@@ -5,6 +5,7 @@ const hipaaAudit = require('./middleware/hipaaAudit');
 const breachDetection = require('./middleware/breachDetection');
 const authMiddleware = require('./middleware/auth');
 const httpsEnforcement = require('./middleware/httpsEnforcement');
+const { apiLimiter, authLimiter } = require('./middleware/rateLimiter');
 const { scheduleBackupVerification } = require('./services/backupVerificationScheduler');
 const db = require('./models/db');
 const knex = require('knex');
@@ -15,6 +16,7 @@ app.use(express.json({ limit: '50mb' }));
 app.use(httpsEnforcement);
 app.use(hipaaAudit);
 app.use(breachDetection);
+app.use('/api/', apiLimiter);
 
 app.use('/api/v1/patients', authMiddleware, require('./api/patients'));
 app.use('/api/v1/records', authMiddleware, require('./api/records'));
@@ -26,7 +28,7 @@ app.use('/api/v1/breach-notifications', authMiddleware, require('./api/breachNot
 app.use('/fhir/r4', authMiddleware, require('./api/fhir'));
 app.use('/api/v1/backup-verification', authMiddleware, require('./api/backupVerification'));
 
-app.use('/api/v1/auth', require('./api/auth'));
+app.use('/api/v1/auth', authLimiter, require('./api/auth'));
 
 app.get('/health', (req, res) => res.json({ status: 'ok' }));
 
