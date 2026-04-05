@@ -7,11 +7,11 @@ class PatientService {
   }
   static async getById(id, user) {
     const patient = await db('patients').where({ id }).first();
-    if (patient) { patient.ssn = decrypt(patient.ssn_encrypted); }
+    if (patient) { patient.ssn = await decrypt(patient.ssn_encrypted); }
     return patient;
   }
   static async create(data, user) {
-    data.ssn_encrypted = encrypt(data.ssn);
+    data.ssn_encrypted = await encrypt(data.ssn);
     delete data.ssn;
     return db('patients').insert(data).returning('*');
   }
