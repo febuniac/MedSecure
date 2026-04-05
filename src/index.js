@@ -28,7 +28,7 @@ app.use('/api/v1/backup-verification', authMiddleware, require('./api/backupVeri
 
 app.use('/api/v1/auth', require('./api/auth'));
 
-app.get('/health', (req, res) => res.json({ status: 'ok' }));
+app.get('/health', (req, res) => res.json({ status: 'ok', timestamp: new Date().toISOString() }));
 
 if (process.env.BACKUP_VERIFICATION_ENABLED !== 'false') {
   const testDb = knex({
