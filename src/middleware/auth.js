@@ -1,5 +1,6 @@
 const jwt = require('jsonwebtoken');
-module.exports = (req, res, next) => {
+
+const authenticate = (req, res, next) => {
   const token = req.headers.authorization?.replace('Bearer ', '');
   if (!token) return res.status(401).json({ error: 'Authentication required' });
   try {
@@ -9,3 +10,15 @@ module.exports = (req, res, next) => {
     res.status(401).json({ error: 'Invalid token' });
   }
 };
+
+function generateToken(user) {
+  const secret = process.env.JWT_SECRET;
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    secret,
+    { expiresIn: '8h' }
+  );
+}
+
+module.exports = authenticate;
+module.exports.generateToken = generateToken;
