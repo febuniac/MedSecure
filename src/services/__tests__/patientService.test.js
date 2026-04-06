@@ -32,7 +32,22 @@ describe('PatientService', () => {
   });
 
   describe('list', () => {
-    it('should return only patients assigned to the provider', async () => {
+    function buildJoinQuery(resolvedRows) {
+      const query = {
+        leftJoin: jest.fn().mockReturnThis(),
+        select: jest.fn().mockResolvedValue(resolvedRows),
+        whereIn: jest.fn().mockReturnThis(),
+      };
+      return query;
+    }
+
+    it('should return patients with appointments using JOIN for provider', async () => {
+      const joinRows = [
+        { id: 'patient-1', first_name: 'John', last_name: 'Doe', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-1', appointment_date: '2026-06-01', appointment_status: 'confirmed' },
+        { id: 'patient-1', first_name: 'John', last_name: 'Doe', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-2', appointment_date: '2026-06-15', appointment_status: 'pending' },
+        { id: 'patient-2', first_name: 'Jane', last_name: 'Smith', dob: '1985-05-10', created_at: '2026-01-02', appointment_id: null, appointment_date: null, appointment_status: null },
+      ];
+
       const assignmentsQuery = {
         where: jest.fn().mockReturnThis(),
         select: jest.fn().mockResolvedValue([
@@ -40,25 +55,25 @@ describe('PatientService', () => {
           { patient_id: 'patient-2' },
         ]),
       };
-      const patientsQuery = {
-        whereIn: jest.fn().mockReturnThis(),
-        select: jest.fn().mockResolvedValue([
-          { id: 'patient-1', first_name: 'John' },
-          { id: 'patient-2', first_name: 'Jane' },
-        ]),
-      };
 
-      let callCount = 0;
+      const joinQuery = buildJoinQuery(joinRows);
+
       db.mockImplementation((table) => {
-        callCount++;
         if (table === 'provider_patient_assignments') return assignmentsQuery;
-        if (table === 'patients') return patientsQuery;
+        if (table === 'patients') return joinQuery;
         return {};
       });
 
       const result = await PatientService.list({}, providerUser);
 
       expect(result).toHaveLength(2);
+      expect(result[0].id).toBe('patient-1');
+      expect(result[0].appointments).toHaveLength(2);
+      expect(result[0].appointments[0].id).toBe('apt-1');
+      expect(result[0].appointments[1].id).toBe('apt-2');
+      expect(result[1].id).toBe('patient-2');
+      expect(result[1].appointments).toHaveLength(0);
+      expect(joinQuery.leftJoin).toHaveBeenCalledWith('appointments', 'patients.id', 'appointments.patient_id');
       expect(assignmentsQuery.where).toHaveBeenCalledWith({
         provider_id: 'provider-1',
         status: 'active',
@@ -77,20 +92,41 @@ describe('PatientService', () => {
       expect(result).toEqual([]);
     });
 
-    it('should return all patients for admin users', async () => {
-      const patientsQuery = {
-        select: jest.fn().mockResolvedValue([
-          { id: 'patient-1' },
-          { id: 'patient-2' },
-          { id: 'patient-3' },
-        ]),
-      };
-      db.mockImplementation(() => patientsQuery);
+    it('should return all patients with appointments for admin users using JOIN', async () => {
+      const joinRows = [
+        { id: 'patient-1', first_name: 'Alice', last_name: 'A', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-10', appointment_date: '2026-07-01', appointment_status: 'confirmed' },
+        { id: 'patient-2', first_name: 'Bob', last_name: 'B', dob: '1991-02-02', created_at: '2026-01-02', appointment_id: null, appointment_date: null, appointment_status: null },
+        { id: 'patient-3', first_name: 'Carol', last_name: 'C', dob: '1992-03-03', created_at: '2026-01-03', appointment_id: 'apt-11', appointment_date: '2026-07-15', appointment_status: 'pending' },
+      ];
+
+      const joinQuery = buildJoinQuery(joinRows);
+      db.mockImplementation(() => joinQuery);
 
       const result = await PatientService.list({}, adminUser);
 
       expect(result).toHaveLength(3);
       expect(db).toHaveBeenCalledWith('patients');
+      expect(joinQuery.leftJoin).toHaveBeenCalledWith('appointments', 'patients.id', 'appointments.patient_id');
+      expect(result[0].appointments).toHaveLength(1);
+      expect(result[1].appointments).toHaveLength(0);
+      expect(result[2].appointments).toHaveLength(1);
+    });
+
+    it('should group multiple appointments under the same patient', async () => {
+      const joinRows = [
+        { id: 'patient-1', first_name: 'John', last_name: 'Doe', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-1', appointment_date: '2026-06-01', appointment_status: 'confirmed' },
+        { id: 'patient-1', first_name: 'John', last_name: 'Doe', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-2', appointment_date: '2026-06-15', appointment_status: 'pending' },
+        { id: 'patient-1', first_name: 'John', last_name: 'Doe', dob: '1990-01-01', created_at: '2026-01-01', appointment_id: 'apt-3', appointment_date: '2026-07-01', appointment_status: 'cancelled' },
+      ];
+
+      const joinQuery = buildJoinQuery(joinRows);
+      db.mockImplementation(() => joinQuery);
+
+      const result = await PatientService.list({}, adminUser);
+
+      expect(result).toHaveLength(1);
+      expect(result[0].appointments).toHaveLength(3);
+      expect(result[0].appointments.map(a => a.id)).toEqual(['apt-1', 'apt-2', 'apt-3']);
     });
   });
 
