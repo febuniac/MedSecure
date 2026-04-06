@@ -4,16 +4,56 @@ const ProviderPatientService = require('./providerPatientService');
 const { AppError, ErrorCodes } = require('../utils/errorCodes');
 
 class PatientService {
-  static async list(filters, user) {
-    if (user.role === 'admin') {
-      return db('patients').select('id', 'first_name', 'last_name', 'dob', 'created_at');
+  static _groupPatientsWithAppointments(rows) {
+    const patientsMap = new Map();
+    for (const row of rows) {
+      const patientId = row.id;
+      if (!patientsMap.has(patientId)) {
+        patientsMap.set(patientId, {
+          id: row.id,
+          first_name: row.first_name,
+          last_name: row.last_name,
+          dob: row.dob,
+          created_at: row.created_at,
+          appointments: [],
+        });
+      }
+      if (row.appointment_id) {
+        patientsMap.get(patientId).appointments.push({
+          id: row.appointment_id,
+          appointment_date: row.appointment_date,
+          status: row.appointment_status,
+        });
+      }
     }
-    const assignments = await db('provider_patient_assignments')
-      .where({ provider_id: user.provider_id, status: 'active' })
-      .select('patient_id');
-    const patientIds = assignments.map(a => a.patient_id);
-    if (patientIds.length === 0) return [];
-    return db('patients').whereIn('id', patientIds).select('id', 'first_name', 'last_name', 'dob', 'created_at');
+    return Array.from(patientsMap.values());
+  }
+
+  static async list(filters, user) {
+    let query = db('patients')
+      .leftJoin('appointments', 'patients.id', 'appointments.patient_id')
+      .select(
+        'patients.id',
+        'patients.first_name',
+        'patients.last_name',
+        'patients.dob',
+        'patients.created_at',
+        'appointments.id as appointment_id',
+        'appointments.appointment_date',
+        'appointments.status as appointment_status'
+      );
+
+    if (user.role !== 'admin') {
+      const assignments = await db('provider_patient_assignments')
+        .where({ provider_id: user.provider_id, status: 'active' })
+        .select('patient_id');
+      const patientIds = assignments.map(a => a.patient_id);
+      if (patientIds.length === 0) return [];
+      query = query.whereIn('patients.id', patientIds);
+    }
+
+    const rows = await query;
+    return PatientService._groupPatientsWithAppointments(rows);
   }
   static async getById(id, user) {
     await ProviderPatientService.verifyAccess(user, id);
