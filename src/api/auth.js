@@ -1,8 +1,9 @@
 const router = require('express').Router();
 const bcrypt = require('bcrypt');
-const jwt = require('jsonwebtoken');
 const db = require('../models/db');
 const { logger } = require('../utils/logger');
+const { generateToken } = require('../middleware/auth');
+
 const { validatePassword } = require('../utils/passwordValidator');
 const { ErrorCodes, formatError } = require('../utils/errorCodes');
 
@@ -62,6 +63,7 @@ router.post('/login', async (req, res) => {
       return res.status(401).json(formatError(ErrorCodes.INVALID_CREDENTIALS, 'Invalid credentials'));
     }
 
+    const token = generateToken(user);
     const token = jwt.sign(
       { id: user.id, email: user.email, role: user.role },
       process.env.JWT_SECRET,

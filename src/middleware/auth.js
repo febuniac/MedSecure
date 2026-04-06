@@ -1,4 +1,6 @@
 const jwt = require('jsonwebtoken');
+
+const authenticate = (req, res, next) => {
 const { ErrorCodes, formatError } = require('../utils/errorCodes');
 
 module.exports = (req, res, next) => {
@@ -11,3 +13,15 @@ module.exports = (req, res, next) => {
     res.status(401).json(formatError(ErrorCodes.INVALID_TOKEN, 'Invalid token'));
   }
 };
+
+function generateToken(user) {
+  const secret = process.env.JWT_SECRET;
+  return jwt.sign(
+    { id: user.id, email: user.email, role: user.role },
+    secret,
+    { expiresIn: '8h' }
+  );
+}
+
+module.exports = authenticate;
+module.exports.generateToken = generateToken;
