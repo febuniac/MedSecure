@@ -45,6 +45,38 @@ class RecordService {
     };
   }
 
+  static async getLabResults(patientId, user, { page = DEFAULT_PAGE, limit = DEFAULT_LIMIT } = {}) {
+    await ProviderPatientService.verifyAccess(user, patientId);
+
+    const sanitizedPage = Math.max(1, parseInt(page, 10) || DEFAULT_PAGE);
+    const sanitizedLimit = Math.min(MAX_LIMIT, Math.max(1, parseInt(limit, 10) || DEFAULT_LIMIT));
+    const offset = (sanitizedPage - 1) * sanitizedLimit;
+
+    const [results, countResult] = await Promise.all([
+      db('lab_results')
+        .where({ patient_id: patientId })
+        .orderBy('result_date', 'desc')
+        .limit(sanitizedLimit)
+        .offset(offset),
+      db('lab_results')
+        .where({ patient_id: patientId })
+        .count('* as total')
+        .first()
+    ]);
+
+    const total = parseInt(countResult.total, 10);
+
+    return {
+      data: results,
+      pagination: {
+        page: sanitizedPage,
+        limit: sanitizedLimit,
+        total,
+        totalPages: Math.ceil(total / sanitizedLimit)
+      }
+    };
+  }
+
   static async getById(id, user) {
     const record = await db('medical_records').where({ id }).first();
     if (!record) {
