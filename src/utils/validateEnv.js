@@ -1,6 +1,6 @@
 const { logger } = require('./logger');
 
-const REQUIRED_ENV_VARS = ['DATABASE_URL', 'JWT_SECRET', 'ENCRYPTION_KEY'];
+const REQUIRED_ENV_VARS = ['DB_PASSWORD', 'JWT_SECRET', 'ENCRYPTION_KEY'];
 
 function validateEnv() {
   const missing = REQUIRED_ENV_VARS.filter(v => !process.env[v]);
