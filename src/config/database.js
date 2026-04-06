@@ -17,6 +17,14 @@ const defaultPoolConfig = {
 };
 
 function buildConnectionConfig(overrides = {}) {
+  const connectionString = overrides.connectionString || process.env.DATABASE_URL;
+  if (connectionString) {
+    return {
+      connectionString,
+      ssl: process.env.NODE_ENV === 'production' ? { rejectUnauthorized: true } : false
+    };
+  }
+
   return {
     host: overrides.host || process.env.DB_HOST || 'localhost',
     port: overrides.port || process.env.DB_PORT || 5432,
