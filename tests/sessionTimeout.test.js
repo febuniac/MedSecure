@@ -3,7 +3,7 @@ const jwt = require('jsonwebtoken');
 // Mock db module to avoid knex dependency
 jest.mock('../src/models/db', () => jest.fn());
 
-const { SESSION_EXPIRY } = require('../src/api/auth');
+const { SESSION_EXPIRY } = require('../src/middleware/auth');
 
 const JWT_SECRET = 'test-secret-key';
 
