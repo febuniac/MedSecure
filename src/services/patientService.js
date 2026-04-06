@@ -1,5 +1,5 @@
 const db = require('../models/db');
-const { encrypt, decrypt } = require('../utils/encryption');
+const { encrypt, decrypt, hashSsn } = require('../utils/encryption');
 const ProviderPatientService = require('./providerPatientService');
 const { AppError, ErrorCodes } = require('../utils/errorCodes');
 
@@ -74,8 +74,27 @@ class PatientService {
     return patient;
   }
   static async create(data, user) {
+    // Check for existing patient by MRN
+    if (data.mrn) {
+      const existingByMrn = await db('patients').where({ mrn: data.mrn }).first();
+      if (existingByMrn) {
+        throw new AppError(ErrorCodes.DUPLICATE_PATIENT, 'A patient with this MRN already exists');
+      }
+    }
+
+    // Check for existing patient by SSN (using deterministic hash)
+    if (data.ssn) {
+      const ssnHash = hashSsn(data.ssn);
+      const existingBySsn = await db('patients').where({ ssn_hash: ssnHash }).first();
+      if (existingBySsn) {
+        throw new AppError(ErrorCodes.DUPLICATE_PATIENT, 'A patient with this SSN already exists');
+      }
+      data.ssn_hash = ssnHash;
+    }
+
     data.ssn_encrypted = await encrypt(data.ssn);
     delete data.ssn;
+
     return db('patients').insert(data).returning('*');
   }
   static async update(id, data, user) {

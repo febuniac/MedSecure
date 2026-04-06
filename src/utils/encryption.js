@@ -34,4 +34,14 @@ async function decrypt(data) {
   return decrypted;
 }
 
-module.exports = { encrypt, decrypt, deriveKey };
+/**
+ * Deterministic HMAC-SHA256 hash of an SSN for duplicate detection.
+ * Unlike encrypt(), this always produces the same output for the same input,
+ * making it suitable for uniqueness lookups.
+ */
+function hashSsn(ssn) {
+  const normalized = ssn.replace(/[^0-9]/g, '');
+  return crypto.createHmac('sha256', ENCRYPTION_KEY).update(normalized).digest('hex');
+}
+
+module.exports = { encrypt, decrypt, deriveKey, hashSsn };
