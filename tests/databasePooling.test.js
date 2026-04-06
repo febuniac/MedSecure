@@ -67,6 +67,7 @@ describe('Database Connection Pooling Configuration', () => {
 
   describe('buildConnectionConfig', () => {
     it('should use default values when no env vars are set', () => {
+      delete process.env.DATABASE_URL;
       delete process.env.DB_HOST;
       delete process.env.DB_PORT;
       delete process.env.DB_USER;
@@ -83,6 +84,7 @@ describe('Database Connection Pooling Configuration', () => {
     });
 
     it('should use environment variables when set', () => {
+      delete process.env.DATABASE_URL;
       process.env.DB_HOST = 'db.example.com';
       process.env.DB_PORT = '5433';
       process.env.DB_USER = 'custom_user';
@@ -98,6 +100,7 @@ describe('Database Connection Pooling Configuration', () => {
     });
 
     it('should allow overrides to take precedence over env vars', () => {
+      delete process.env.DATABASE_URL;
       process.env.DB_HOST = 'env-host.com';
 
       const config = buildConnectionConfig({ host: 'override-host.com' });
@@ -105,6 +108,7 @@ describe('Database Connection Pooling Configuration', () => {
     });
 
     it('should enable SSL with rejectUnauthorized in production', () => {
+      delete process.env.DATABASE_URL;
       process.env.NODE_ENV = 'production';
 
       const config = buildConnectionConfig();
@@ -112,10 +116,71 @@ describe('Database Connection Pooling Configuration', () => {
     });
 
     it('should disable SSL in non-production', () => {
+      delete process.env.DATABASE_URL;
       process.env.NODE_ENV = 'development';
 
       const config = buildConnectionConfig();
       expect(config.ssl).toBe(false);
+    });
+  });
+
+  describe('buildConnectionConfig with DATABASE_URL', () => {
+    it('should use DATABASE_URL when set', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@db.example.com:5432/mydb';
+      delete process.env.NODE_ENV;
+
+      const config = buildConnectionConfig();
+      expect(config.connectionString).toBe('postgresql://user:pass@db.example.com:5432/mydb');
+      expect(config.host).toBeUndefined();
+      expect(config.port).toBeUndefined();
+      expect(config.user).toBeUndefined();
+      expect(config.password).toBeUndefined();
+      expect(config.database).toBeUndefined();
+    });
+
+    it('should use DATABASE_URL over individual DB_* env vars', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@db.example.com:5432/mydb';
+      process.env.DB_HOST = 'other-host.com';
+      process.env.DB_USER = 'other_user';
+
+      const config = buildConnectionConfig();
+      expect(config.connectionString).toBe('postgresql://user:pass@db.example.com:5432/mydb');
+      expect(config.host).toBeUndefined();
+    });
+
+    it('should allow connectionString override to take precedence over DATABASE_URL', () => {
+      process.env.DATABASE_URL = 'postgresql://env-url/db';
+
+      const config = buildConnectionConfig({ connectionString: 'postgresql://override-url/db' });
+      expect(config.connectionString).toBe('postgresql://override-url/db');
+    });
+
+    it('should enable SSL in production when using DATABASE_URL', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@db.example.com:5432/mydb';
+      process.env.NODE_ENV = 'production';
+
+      const config = buildConnectionConfig();
+      expect(config.connectionString).toBe('postgresql://user:pass@db.example.com:5432/mydb');
+      expect(config.ssl).toEqual({ rejectUnauthorized: true });
+    });
+
+    it('should disable SSL in non-production when using DATABASE_URL', () => {
+      process.env.DATABASE_URL = 'postgresql://user:pass@db.example.com:5432/mydb';
+      process.env.NODE_ENV = 'development';
+
+      const config = buildConnectionConfig();
+      expect(config.ssl).toBe(false);
+    });
+
+    it('should fall back to individual vars when DATABASE_URL is not set', () => {
+      delete process.env.DATABASE_URL;
+      process.env.DB_HOST = 'fallback-host.com';
+      process.env.DB_USER = 'fallback_user';
+
+      const config = buildConnectionConfig();
+      expect(config.connectionString).toBeUndefined();
+      expect(config.host).toBe('fallback-host.com');
+      expect(config.user).toBe('fallback_user');
     });
   });
 
