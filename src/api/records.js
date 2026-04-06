@@ -21,6 +21,16 @@ router.post('/', async (req, res) => {
     res.status(status).json(body);
   }
 });
+router.get('/patient/:patientId/lab-results', async (req, res) => {
+  try {
+    const { page, limit } = req.query;
+    const results = await RecordService.getLabResults(req.params.patientId, req.user, { page, limit });
+    res.json(results);
+  } catch (err) {
+    const { status, body } = formatErrorResponse(err);
+    res.status(status).json(body);
+  }
+});
 router.get('/:id', async (req, res) => {
   try {
     const record = await RecordService.getById(req.params.id, req.user);

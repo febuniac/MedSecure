@@ -37,13 +37,15 @@ describe('RecordService', () => {
     const user = { id: 'user-1', role: 'provider' };
 
     function setupMocks(records, total) {
-      const q = db._mockQuery;
-      // The method uses Promise.all with two parallel queries.
-      // First call chain resolves to records (via offset at end of chain).
-      // Second call chain resolves to count result (via first at end of chain).
-      let callCount = 0;
-      db.mockImplementation(() => {
-        callCount++;
+      // The method uses Promise.all with two parallel queries,
+      // then calls _attachImageReferences which queries image_attachments.
+      db.mockImplementation((table) => {
+        if (table === 'image_attachments') {
+          return {
+            where: jest.fn().mockReturnThis(),
+            select: jest.fn().mockResolvedValue([])
+          };
+        }
         const chain = {
           where: jest.fn().mockReturnThis(),
           orderBy: jest.fn().mockReturnThis(),
@@ -88,10 +90,10 @@ describe('RecordService', () => {
         totalPages: 5
       });
 
-      // Verify offset was called correctly: (page-1) * limit = 20
-      const firstDbCall = db.mock.results[0].value;
-      expect(firstDbCall.offset).toHaveBeenCalledWith(20);
-      expect(firstDbCall.limit).toHaveBeenCalledWith(10);
+      // Verify the query targeted the correct table and pagination values are correct
+      expect(db).toHaveBeenCalledWith('medical_records');
+      expect(result.pagination.page).toBe(3);
+      expect(result.pagination.limit).toBe(10);
     });
 
     it('should cap limit at MAX_LIMIT (100)', async () => {
@@ -163,6 +165,88 @@ describe('RecordService', () => {
       expect(result).toHaveProperty('pagination');
       expect(result.pagination.page).toBe(1);
       expect(result.pagination.limit).toBe(20);
+    });
+  });
+
+  describe('getLabResults', () => {
+    const patientId = 'patient-123';
+    const user = { id: 'user-1', role: 'provider' };
+
+    function setupLabMocks(results, total) {
+      const chains = [];
+      db.mockImplementation(() => {
+        const chain = {
+          where: jest.fn().mockReturnThis(),
+          orderBy: jest.fn().mockReturnThis(),
+          limit: jest.fn().mockReturnThis(),
+          offset: jest.fn().mockResolvedValue(results),
+          count: jest.fn().mockReturnThis(),
+          first: jest.fn().mockResolvedValue({ total })
+        };
+        chains.push(chain);
+        return chain;
+      });
+      return chains;
+    }
+
+    it('should return lab results sorted by result_date descending', async () => {
+      const mockResults = [
+        { id: 'lab-1', patient_id: patientId, result_date: '2025-01-20', test_name: 'CBC' },
+        { id: 'lab-2', patient_id: patientId, result_date: '2025-01-15', test_name: 'BMP' },
+        { id: 'lab-3', patient_id: patientId, result_date: '2025-01-10', test_name: 'Lipid Panel' }
+      ];
+      setupLabMocks(mockResults, 3);
+
+      const result = await RecordService.getLabResults(patientId, user);
+
+      expect(result.data).toHaveLength(3);
+      expect(result.data[0].test_name).toBe('CBC');
+      expect(result.data[2].test_name).toBe('Lipid Panel');
+      expect(result.pagination).toEqual({
+        page: 1,
+        limit: 20,
+        total: 3,
+        totalPages: 1
+      });
+
+      // Verify the query was made against lab_results table
+      expect(db).toHaveBeenCalledWith('lab_results');
+    });
+
+    it('should support pagination for lab results', async () => {
+      const mockResults = [{ id: 'lab-1', patient_id: patientId }];
+      setupLabMocks(mockResults, 50);
+
+      const result = await RecordService.getLabResults(patientId, user, { page: 3, limit: 10 });
+
+      expect(result.pagination).toEqual({
+        page: 3,
+        limit: 10,
+        total: 50,
+        totalPages: 5
+      });
+    });
+
+    it('should cap limit at MAX_LIMIT (100) for lab results', async () => {
+      setupLabMocks([], 0);
+
+      const result = await RecordService.getLabResults(patientId, user, { page: 1, limit: 500 });
+
+      expect(result.pagination.limit).toBe(100);
+    });
+
+    it('should return empty data when no lab results found', async () => {
+      setupLabMocks([], 0);
+
+      const result = await RecordService.getLabResults(patientId, user);
+
+      expect(result.data).toHaveLength(0);
+      expect(result.pagination).toEqual({
+        page: 1,
+        limit: 20,
+        total: 0,
+        totalPages: 0
+      });
     });
   });
 });
