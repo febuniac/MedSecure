@@ -1,5 +1,4 @@
 const express = require('express');
-const helmet = require('helmet');
 const { logger } = require('./utils/logger');
 const { validateEnv } = require('./utils/validateEnv');
 const corsMiddleware = require('./middleware/cors');
@@ -15,7 +14,8 @@ const v1Router = require('./api/v1Router');
 validateEnv();
 
 const app = express();
-app.use(helmet());
+const createSecurityHeaders = require('./middleware/securityHeaders');
+app.use(createSecurityHeaders());
 app.use(corsMiddleware);
 app.use(express.json({ limit: '5mb' }));
 app.use(httpsEnforcement);
